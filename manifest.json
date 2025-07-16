@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Art Institute of Chicago: Art Tab",
-    "version": "1.7",
+    "version": "2.0",
 
     "action": {
         "default_icon": {
@@ -11,14 +11,14 @@
         },
         "default_title": "Art Institute of Chicago"
     },
-    "description": "Sneak some inspiration into your day. See a new, random artwork from the museum's vast collection every time you open a new tab.",
+    "description": "Sneak some inspiration into your day. See a new, random artwork from the museum's vast collection every day (or every time you open a new tab.)",
     "icons": {
         "16": "assets/logo--icon--16.png",
         "48": "assets/logo--icon--48.png",
         "128": "assets/logo--icon--128.png"
     },
 
-    "author": "Art Institute of Chicago",
+    "author": "Chris de Almeida",
     "chrome_url_overrides": {
         "newtab": "index.html"
     },
