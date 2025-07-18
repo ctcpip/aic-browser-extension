@@ -97,6 +97,13 @@ import {
     const lastLoaded = localStorage.getItem(lastLoadedDateKey);
 
     if (!getStoredSettings().dailyMode || forceNew || lastLoaded !== dateNow) {
+      if (response.data.length === 1) {
+        // we were already displaying the last artwork in our data, so we need to get new data
+        response.data = [];
+        localStorage.setItem(savedResponseKey, JSON.stringify(response));
+        loadNewArtwork(forceNew);
+        return;
+      }
       localStorage.setItem(lastLoadedDateKey, new Date().toLocaleDateString());
       response.data = response.data.slice(1);
       artwork = response.data[0];
@@ -130,7 +137,7 @@ import {
   }
 
   function updatePage(artwork) {
-    const artistPrint = [artwork.artist_title, artwork.date_display]
+    const artistPrint = [artwork?.artist_title, artwork?.date_display]
       .filter(function(el) {
         return el !== null;
       })
@@ -140,8 +147,8 @@ import {
 
     const linkToArtwork = `https://www.artic.edu/artworks/${artwork.id}/${slugify(titlePrint)}`;
 
-    artistElement.innerHTML = artistPrint;
-    titleElement.innerHTML = titlePrint;
+    artistElement.textContent = artistPrint;
+    titleElement.textContent = titlePrint;
     tombstoneElement.setAttribute('href', linkToArtwork);
 
     const downloadUrl = `https://www.artic.edu/iiif/2/${artwork.image_id}/full/3000,/0/default.jpg`;
@@ -173,7 +180,7 @@ import {
     };
   }
 
-  function addTiledImage(artwork, isPreload) {
+  function addTiledImage(artwork, isPreload, levels) {
     // Save this so we can add it to our preload log
     const currentImageId = artwork.image_id;
 
@@ -182,16 +189,29 @@ import {
       viewer.world.removeAll();
     }
 
+    levels = levels || [
+      getIIIFLevel(artwork, 200),
+      getIIIFLevel(artwork, 400),
+      getIIIFLevel(artwork, 843),
+      getIIIFLevel(artwork, 1686),
+    ];
+
+    viewer.removeAllHandlers('tile-load-failed');
+
+    viewer.addHandler('tile-load-failed', function(/* e */) {
+      // console.debug(e);
+
+      // if load failed, it's probably due to 403 Forbidden: Requests for scales in excess of 100% are not allowed.
+      // so remove the largest scale level and try again
+      levels.pop();
+      addTiledImage(artwork, isPreload, levels);
+    });
+
     // https://openseadragon.github.io/docs/OpenSeadragon.Viewer.html#addTiledImage
     viewer.addTiledImage({
       tileSource: {
         type: 'legacy-image-pyramid',
-        levels: [
-          getIIIFLevel(artwork, 200),
-          getIIIFLevel(artwork, 400),
-          getIIIFLevel(artwork, 843),
-          getIIIFLevel(artwork, 1686),
-        ],
+        levels,
       },
       opacity: isPreload ? 0 : 1,
       preload: isPreload ? true : false,
@@ -230,7 +250,7 @@ import {
           // Exit early if we have enough images preloaded
           if (
             excludedImages.length > imagesToPreload ||
-                        imagesPreloadedThisSession >= imagesToPreloadPerSession
+            imagesPreloadedThisSession >= imagesToPreloadPerSession
           ) {
             return;
           }
@@ -251,6 +271,9 @@ import {
             }
           }
         });
+      },
+      error: function(event) {
+        console.error(event);
       },
     });
   }
