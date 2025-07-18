@@ -5,4 +5,8 @@ export default [
   ...ultraMegaConfig,
   { languageOptions: { globals: { ...globals.browser } } },
   { ignores: ['openseadragon.min.js'] },
+  {
+    files: ['pack.cjs'],
+    languageOptions: { globals: { ...globals.node } },
+  },
 ];

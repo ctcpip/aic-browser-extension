@@ -6,6 +6,7 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "pack": "node pack.cjs",
     "test": "npm run lint"
   },
   "main": "index.js",
@@ -26,5 +27,20 @@
     "eslint": "^9.31.0",
     "eslint-config-ultra-mega": "^2.1.0",
     "globals": "^16.3.0"
-  }
+  },
+  "files": [
+    "assets/",
+    "index.html",
+    "manifest.json",
+    "lib.js",
+    "LICENSE",
+    "openseadragon.min.js",
+    "options.css",
+    "options.html",
+    "options.js",
+    "README.md",
+    "reset.css",
+    "script.js",
+    "style.css"
+  ]
 }
