@@ -64,7 +64,7 @@ function merge(target, source) {
 
 // initialize settings with defaults
 const settings = {
-  dailyMode: false,
+  dailyMode: true,
   departmentOptions: {
     options: [],
     lastFetched: null,
