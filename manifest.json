@@ -11,7 +11,7 @@
     "default_title": "Art Institute of Chicago",
     "default_popup": "options.html"
   },
-  "description": "Sneak some inspiration into your day. See a new, random artwork from the museum's vast collection every day (or every time you open a new tab.)",
+  "description": "See a new, random artwork from the museum's vast collection every day (or every time you open a new tab.)",
   "icons": {
     "16": "assets/logo--icon--16.png",
     "48": "assets/logo--icon--48.png",
