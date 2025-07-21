@@ -1,16 +1,14 @@
-# Art Institute of Chicago Browser Extension
+# Art Institute of Chicago: Art Tab - Enhanced (Browser Extension)
 
 ![Art Institute of Chicago](https://raw.githubusercontent.com/Art-Institute-of-Chicago/template/master/aic-logo.gif)
 
 A browser extension that presents a random work of art from the Art Institute of Chicago's collection in new tabs.
 
-This extension is available in the [Chrome Web Store](https://chrome.google.com/webstore/detail/art-institute-of-chicago/abacageipbknolldcoehafgfjamoejad).
+<!-- This extension is available in the [Chrome Web Store](link). -->
 
-<!-- ![Screenshot of the extension in action ](docs/chromeNewTab.jpg) -->
+![Screenshot of the extension in action](screenshots/extension.png)
 
-<!-- ![Screenshot of Chrome Windows menu with Extensions highlighted](docs/chrome-setup-1.jpg) -->
-
-<!-- ![Screenshot of the Extensions window ](docs/chrome-setup-2.jpg) -->
+![Screenshot of the extension options](screenshots/extension-options.png)
 
 ## Development
 

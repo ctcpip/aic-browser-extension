@@ -313,6 +313,8 @@ import {
       },
     };
 
+    getSpecificArtWork(query);
+
     const settings = getStoredSettings();
 
     if (settings.departmentOptions.selected.length > 0) {
@@ -356,3 +358,25 @@ import {
       .replace(/-+$/, ''); // Trim - from end of text
   }
 })();
+
+function getSpecificArtWork(query) {
+  // used for taking screenshots featuring specific art
+  // must not be committed without the early `return`
+
+  return;
+
+  query.query = { // eslint-disable-line no-unreachable
+    bool: {
+      must: [
+        { match: { title: 'La Grande Jatte' } },
+        { match: { artist_title: 'Seurat' } },
+      ],
+      filter: [
+        { term: { is_public_domain: true } },
+        { exists: { field: 'image_id' } },
+        { exists: { field: 'thumbnail.width' } },
+        { exists: { field: 'thumbnail.height' } },
+      ],
+    },
+  };
+}
