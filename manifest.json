@@ -24,5 +24,10 @@
   "permissions": [
     "storage"
   ],
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{30461fac-56ff-4058-b23b-d020b6be46c1}"
+    }
+  }
 }
