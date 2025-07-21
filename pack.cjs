@@ -3,7 +3,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const PACKAGE_JSON_PATH = path.resolve(__dirname, 'package.json');
-const ZIP_FILENAME = 'chrome-aic-browser-extension-enhanced.zip';
+const ZIP_FILENAME = 'aic-browser-extension-enhanced.zip';
 
 const packageJSON = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'));
 const files = packageJSON.files;
