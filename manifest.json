@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Art Institute of Chicago: Art Tab - Enhanced",
-  "version": "2.0",
+  "version": "2.0.1",
   "action": {
     "default_icon": {
       "16": "assets/logo--icon--16.png",
@@ -21,9 +21,6 @@
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
-  "permissions": [
-    "storage"
-  ],
   "options_page": "options.html",
   "browser_specific_settings": {
     "gecko": {
