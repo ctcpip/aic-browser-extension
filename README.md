@@ -4,7 +4,11 @@
 
 A browser extension that presents a random work of art from the Art Institute of Chicago's collection in new tabs.
 
-<!-- This extension is available in the [Chrome Web Store](link). -->
+> [!TIP]
+> This extension is available for:
+>
+> - [Firefox][ff-link] - [Get Extension][ff-link]
+> - [Chrome][chrome-link] - [Get Extension][chrome-link]
 
 ![Screenshot of the extension in action](screenshots/extension.png)
 
@@ -41,3 +45,6 @@ Inspiration for this project came from the following browser extension projects:
 
 The following tutorial helped us get started:
 [How to Create and Publish a Chrome Extension in 20 minutes](https://www.freecodecamp.org/news/how-to-create-and-publish-a-chrome-extension-in-20-minutes-6dc8395d7153/) from [freeCodeCamp.org](https://freeCodeCamp.org)
+
+[ff-link]: https://addons.mozilla.org/en-US/firefox/addon/art-institute-art-tab/
+[chrome-link]: https://chromewebstore.google.com/detail/art-institute-of-chicago/nihnjhnkjmplkhhagmeepnopeoolajdh
