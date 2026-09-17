@@ -1,14 +1,22 @@
 import ultraMegaConfig from 'eslint-config-ultra-mega';
-import globals from 'globals';
 
 export default [
   ...ultraMegaConfig,
   {
     languageOptions: {
       globals: {
-        ...globals.browser,
-        chrome: 'readonly',
         browser: 'readonly',
+        chrome: 'readonly',
+        console: 'readonly',
+        crypto: 'readonly',
+        document: 'readonly',
+        fetch: 'readonly',
+        localStorage: 'readonly',
+        navigator: 'readonly',
+        setTimeout: 'readonly',
+        URL: 'readonly',
+        window: 'readonly',
+        XMLHttpRequest: 'readonly',
       },
     },
   },
@@ -31,6 +39,11 @@ export default [
   },
   {
     files: ['build.cjs', 'pack.cjs'],
-    languageOptions: { globals: { ...globals.node } },
+    languageOptions: {
+      globals: {
+        __dirname: 'readonly',
+        process: 'readonly',
+      },
+    },
   },
 ];
