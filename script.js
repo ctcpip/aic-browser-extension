@@ -105,7 +105,10 @@ import {
       return true;
     }
 
-    const origins = ['https://www.artic.edu/*'];
+    const origins = [
+      'https://www.artic.edu/*',
+      'https://artic.edu/*',
+    ];
     try {
       const granted = await extensionApi.permissions.request({ origins });
       if (!granted) {
