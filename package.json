@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "pack": "node pack.cjs",
-    "test": "npm run lint"
+    "//": "pack runs build, so no need to run build in test command",
+    "test": "npm run lint && npm run pack"
   },
   "main": "index.js",
   "type": "module",
