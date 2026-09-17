@@ -5,9 +5,11 @@ import {
   getSettings,
   noDepartmentTerm,
   saveSettings,
+  settingsRevisionKey,
 } from './lib.js';
 
 const contemporaryArt = 'Contemporary Art';
+const preloadClaimsLock = 'aic-art-tab-preload-claims';
 
 const baseQuery = {
   resources: 'artworks',
@@ -55,13 +57,24 @@ for (const o of settings.departmentOptions.options) {
   divDepartments.append(label);
 }
 
-function updateDepartment() {
+async function updateDepartment() {
   settings.departmentOptions.selected = Array.from(divDepartments.querySelectorAll('input:checked')).map(
     (i) => i.value,
   );
   save();
   // clear cached artwork data so that preferences are respected immediately
-  Object.values(artworkCacheKeys).forEach(k => localStorage.removeItem(k));
+  await navigator.locks.request(preloadClaimsLock, function() {
+    localStorage.setItem(settingsRevisionKey, crypto.randomUUID());
+    Object.values(artworkCacheKeys).forEach(k => localStorage.removeItem(k));
+    const preloadClaimPrefix = `${artworkCacheKeys.preloadingImagesKey}:claim:`;
+    for (let index = localStorage.length - 1; index >= 0; index--) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(preloadClaimPrefix)) {
+        localStorage.removeItem(key);
+      }
+    }
+    localStorage.removeItem(`${artworkCacheKeys.preloadingImagesKey}:claims`);
+  });
 }
 
 if (settings.departmentOptions.selected.length === 0) {

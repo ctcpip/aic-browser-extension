@@ -26,14 +26,13 @@
   },
   "permissions": [
     "cookies",
-    "declarativeNetRequest"
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "https://api.artic.edu/*"
   ],
   "optional_host_permissions": [
-    "https://www.artic.edu/*",
-    "https://artic.edu/*"
+    "https://www.artic.edu/*"
   ],
   "options_page": "options.html",
   "browser_specific_settings": {

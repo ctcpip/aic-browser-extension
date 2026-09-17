@@ -18,7 +18,6 @@ let syncQueue = Promise.resolve();
 
 const articOrigins = [
   'https://www.artic.edu/*',
-  'https://artic.edu/*',
 ];
 const cookieSyncMaxAgeMs = 30 * 1000;
 const iiifHostname = 'www.artic.edu';

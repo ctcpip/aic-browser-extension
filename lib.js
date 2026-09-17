@@ -1,5 +1,6 @@
 const apiURL = 'https://api.artic.edu/api/v1/search';
 const noDepartmentTerm = 'None (No Department Association)';
+const settingsRevisionKey = 'settingsRevision';
 
 function getJson(body, callback, forceNew) {
   const request = new XMLHttpRequest();
@@ -111,4 +112,5 @@ export {
   merge,
   noDepartmentTerm,
   saveSettings,
+  settingsRevisionKey,
 };

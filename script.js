@@ -4,6 +4,7 @@ import {
   getJson,
   getStoredSettings,
   noDepartmentTerm,
+  settingsRevisionKey,
 } from './lib.js';
 
 (function() {
@@ -19,7 +20,13 @@ import {
   const imagesToPreload = 7;
 
   const imagesToPreloadPerSession = 3;
+  const preloadClaimsKey = preloadingImagesKey;
+  const legacyPreloadClaimsKey = `${preloadingImagesKey}:claims`;
+  const preloadClaimPrefix = `${preloadingImagesKey}:claim:`;
+  const preloadClaimsLock = 'aic-art-tab-preload-claims';
+  const preloadClaimMaxAgeMs = 10 * 60 * 1000;
   let imagesPreloadedThisSession = 0;
+  let pageIsUnloading = false;
 
   let tombstoneElement;
   let titleElement;
@@ -36,7 +43,7 @@ import {
   let diagnosisGeneration = null;
   let diagnosticRetryGeneration = null;
   const tileFailureHandlers = new Set();
-  const preloadsStartedThisPage = new Set();
+  const preloadClaimsStartedThisPage = new Map();
 
   document.addEventListener('DOMContentLoaded', function() {
     tombstoneElement = document.getElementById('tombstone');
@@ -80,6 +87,16 @@ import {
     const reloadLink = document.getElementById('reload-link');
     reloadLink.addEventListener('click', handleReload);
     reloadLink.addEventListener('keypress', handleReload);
+    window.addEventListener('pagehide', function(event) {
+      if (event.persisted) {
+        return;
+      }
+      pageIsUnloading = true;
+      releasePagePreloads();
+    });
+    window.addEventListener('pageshow', function() {
+      pageIsUnloading = false;
+    });
   });
 
   async function ensureArticHostAccess() {
@@ -88,7 +105,7 @@ import {
       return true;
     }
 
-    const origins = ['https://www.artic.edu/*', 'https://artic.edu/*'];
+    const origins = ['https://www.artic.edu/*'];
     try {
       const granted = await extensionApi.permissions.request({ origins });
       if (!granted) {
@@ -189,20 +206,196 @@ import {
     diagnoseImageFailure(artwork, url, generation);
   }
 
-  function releasePreload(imageId) {
-    if (!preloadsStartedThisPage.delete(imageId)) {
-      return;
+  function readLegacyPreloadClaims() {
+    const stored = JSON.parse(localStorage.getItem(preloadClaimsKey));
+    const legacyClaims = JSON.parse(localStorage.getItem(legacyPreloadClaimsKey)) || {};
+    return Array.isArray(stored)
+      ? Object.fromEntries(stored.map(imageId => [imageId, legacyClaims[imageId]]))
+      : stored || {};
+  }
+
+  function readActivePreloadClaims() {
+    const claims = {};
+    const now = Date.now();
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(preloadClaimPrefix)) {
+        continue;
+      }
+      try {
+        const record = JSON.parse(localStorage.getItem(key));
+        if (
+          record?.imageId
+          && record.claimedAt > 0
+          && now - record.claimedAt < preloadClaimMaxAgeMs
+          && (!claims[record.imageId] || record.claimedAt < claims[record.imageId].claimedAt)
+        ) {
+          claims[record.imageId] = { ...record, key };
+        }
+      }
+      catch {
+        // Transitional per-image claims are discarded below.
+      }
+    }
+    return claims;
+  }
+
+  function removeExpiredPreloadClaims() {
+    const now = Date.now();
+    for (let index = localStorage.length - 1; index >= 0; index--) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(preloadClaimPrefix)) {
+        continue;
+      }
+      let claimedAt = 0;
+      try {
+        claimedAt = Number(JSON.parse(localStorage.getItem(key))?.claimedAt);
+      }
+      catch {
+        // Invalid or transitional claim.
+      }
+      if (!(claimedAt > 0) || now - claimedAt >= preloadClaimMaxAgeMs) {
+        localStorage.removeItem(key);
+      }
+    }
+  }
+
+  function writePreloadClaims(previousClaims, claims) {
+    const retainedKeys = new Set(Object.values(claims).map(claim => claim.key));
+    for (let index = localStorage.length - 1; index >= 0; index--) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(preloadClaimPrefix) && !retainedKeys.has(key)) {
+        localStorage.removeItem(key);
+      }
     }
 
-    const preloadingImages = JSON.parse(localStorage.getItem(preloadingImagesKey)) || [];
-    localStorage.setItem(
-      preloadingImagesKey,
-      JSON.stringify(preloadingImages.filter(item => item !== imageId)),
-    );
+    const previousKeys = new Set(Object.values(previousClaims).map(claim => claim.key));
+    Object.values(claims).forEach(function(claim) {
+      if (!previousKeys.has(claim.key)) {
+        localStorage.setItem(claim.key, JSON.stringify({
+          imageId: claim.imageId,
+          claimedAt: claim.claimedAt,
+        }));
+      }
+    });
+    localStorage.removeItem(preloadClaimsKey);
+    localStorage.removeItem(legacyPreloadClaimsKey);
+  }
+
+  function updatePreloadClaims(update) {
+    return navigator.locks.request(preloadClaimsLock, function() {
+      removeExpiredPreloadClaims();
+      const previousClaims = readActivePreloadClaims();
+      const existingClaims = { ...previousClaims };
+      const legacyClaims = readLegacyPreloadClaims();
+      Object.entries(legacyClaims).forEach(function([imageId, claimedAt]) {
+        const timestamp = Number(claimedAt);
+        if (
+          !existingClaims[imageId]
+          && timestamp > 0
+          && Date.now() - timestamp < preloadClaimMaxAgeMs
+        ) {
+          existingClaims[imageId] = {
+            imageId,
+            claimedAt: timestamp,
+            key: `${preloadClaimPrefix}${crypto.randomUUID()}`,
+          };
+        }
+      });
+      const result = update(existingClaims);
+      writePreloadClaims(previousClaims, existingClaims);
+      return result;
+    }).catch(function(error) {
+      console.warn('[aic-art-tab] preload claim update failed', error);
+      return null;
+    });
+  }
+
+  function getActivePreloadingImages() {
+    return Object.keys(readActivePreloadClaims());
+  }
+
+  async function claimPreload(imageId) {
+    const claim = await updatePreloadClaims(function(claims) {
+      const preloadedImages = JSON.parse(localStorage.getItem(preloadedImagesKey)) || [];
+      const savedResponse = JSON.parse(localStorage.getItem(savedResponseKey));
+      const stillRelevant = savedResponse?.data.some(artwork => artwork.image_id === imageId);
+      if (
+        !stillRelevant
+        || claims[imageId]
+        || preloadedImages.includes(imageId)
+        || preloadedImages.length + Object.keys(claims).length >= imagesToPreload
+      ) {
+        return null;
+      }
+      const claim = {
+        imageId,
+        claimedAt: Date.now(),
+        key: `${preloadClaimPrefix}${crypto.randomUUID()}`,
+      };
+      claims[imageId] = claim;
+      return claim;
+    });
+    if (claim) {
+      preloadClaimsStartedThisPage.set(imageId, claim.key);
+    }
+    return Boolean(claim);
+  }
+
+  async function completePreload(imageId) {
+    const claimKey = preloadClaimsStartedThisPage.get(imageId);
+    const completed = await updatePreloadClaims(function(claims) {
+      if (claims[imageId]?.key === claimKey) {
+        delete claims[imageId];
+      }
+      const savedResponse = JSON.parse(localStorage.getItem(savedResponseKey));
+      const stillRelevant = savedResponse?.data.some(artwork => artwork.image_id === imageId);
+      if (!stillRelevant) {
+        return true;
+      }
+      const preloadedImages = JSON.parse(localStorage.getItem(preloadedImagesKey)) || [];
+      if (!preloadedImages.includes(imageId)) {
+        preloadedImages.push(imageId);
+        localStorage.setItem(preloadedImagesKey, JSON.stringify(preloadedImages));
+      }
+      return true;
+    });
+    if (completed) {
+      preloadClaimsStartedThisPage.delete(imageId);
+    }
+    else {
+      releasePreload(imageId);
+    }
+    return Boolean(completed);
+  }
+
+  function releasePreload(imageId) {
+    const claimKey = preloadClaimsStartedThisPage.get(imageId);
+    if (!claimKey) {
+      return;
+    }
+    preloadClaimsStartedThisPage.delete(imageId);
+    localStorage.removeItem(claimKey);
+  }
+
+  function prunePreloadState(validImageIds) {
+    const valid = new Set(validImageIds);
+    updatePreloadClaims(function(claims) {
+      Object.keys(claims).forEach(function(imageId) {
+        if (!valid.has(imageId)) {
+          delete claims[imageId];
+        }
+      });
+      const preloadedImages = JSON.parse(localStorage.getItem(preloadedImagesKey)) || [];
+      localStorage.setItem(
+        preloadedImagesKey,
+        JSON.stringify(preloadedImages.filter(imageId => valid.has(imageId))),
+      );
+    });
   }
 
   function releasePagePreloads() {
-    [...preloadsStartedThisPage].forEach(releasePreload);
+    [...preloadClaimsStartedThisPage.keys()].forEach(releasePreload);
   }
 
   async function handleReload(e) {
@@ -226,7 +419,22 @@ import {
       }
     }
 
-    getJson(getQuery(), processResponse, forceNew);
+    const settingsRevision = localStorage.getItem(settingsRevisionKey);
+    getJson(getQuery(), function(response, requestedForceNew) {
+      navigator.locks.request(preloadClaimsLock, function() {
+        if (localStorage.getItem(settingsRevisionKey) !== settingsRevision) {
+          return false;
+        }
+        processResponse(response, requestedForceNew);
+        return true;
+      }).then(function(processed) {
+        if (!processed && !pageIsUnloading) {
+          loadNewArtwork(requestedForceNew);
+        }
+      }).catch(function(error) {
+        console.warn('[aic-art-tab] artwork response processing failed', error);
+      });
+    }, forceNew);
   }
 
   /**
@@ -261,19 +469,7 @@ import {
       return item.image_id;
     });
 
-    let preloadedImages = JSON.parse(localStorage.getItem(preloadedImagesKey)) || [];
-    let preloadingImages = JSON.parse(localStorage.getItem(preloadingImagesKey)) || [];
-
-    preloadedImages = preloadedImages.filter(function(item) {
-      return imageIdsInResponse.includes(item);
-    });
-
-    preloadingImages = preloadingImages.filter(function(item) {
-      return imageIdsInResponse.includes(item);
-    });
-
-    localStorage.setItem(preloadingImagesKey, JSON.stringify(preloadingImages));
-    localStorage.setItem(preloadedImagesKey, JSON.stringify(preloadedImages));
+    prunePreloadState(imageIdsInResponse);
 
     updatePage(artwork);
   }
@@ -448,13 +644,15 @@ import {
       preload: isPreload ? true : false,
       success: function(event) {
         // https://openseadragon.github.io/docs/OpenSeadragon.TiledImage.html#.event:fully-loaded-change
-        event.item.addHandler('fully-loaded-change', function(callbackObject) {
+        event.item.addHandler('fully-loaded-change', async function(callbackObject) {
           const tiledImage = callbackObject.eventSource;
 
           // We don't want this to fire on every zoom and pan
           tiledImage.removeAllHandlers('fully-loaded-change');
-          viewer.removeHandler('tile-load-failed', tileFailureHandler);
-          tileFailureHandlers.delete(tileFailureHandler);
+          if (isPreload) {
+            viewer.removeHandler('tile-load-failed', tileFailureHandler);
+            tileFailureHandlers.delete(tileFailureHandler);
+          }
 
           if (generation !== imageLoadGeneration) {
             tiledImage.destroy();
@@ -468,30 +666,22 @@ import {
             hideImageError();
           }
 
-          // We want to check LocalStorage each time in case multiple new tabs are preloading
-          const preloadedImages = JSON.parse(localStorage.getItem(preloadedImagesKey)) || [];
-          let preloadingImages = JSON.parse(localStorage.getItem(preloadingImagesKey)) || [];
-
-          // Be sure to exclude the current image from preloading!
-          const excludedImages = preloadedImages.concat(preloadingImages, [currentImageId]);
-
           if (isPreload) {
-            if (!preloadedImages.includes(currentImageId)) {
-              preloadedImages.push(currentImageId);
-            }
-
-            preloadingImages = preloadingImages.filter(function(item) {
-              return item !== currentImageId;
-            });
-
-            localStorage.setItem(preloadingImagesKey, JSON.stringify(preloadingImages));
-            localStorage.setItem(preloadedImagesKey, JSON.stringify(preloadedImages));
-            preloadsStartedThisPage.delete(currentImageId);
-
             tiledImage.destroy(); // don't load more tiles during zoom and pan
-
+            const completed = await completePreload(currentImageId);
+            if (!completed || pageIsUnloading || generation !== imageLoadGeneration) {
+              return;
+            }
             imagesPreloadedThisSession++;
           }
+
+          // Read fresh state after completing this preload. Claim writes are
+          // serialized across extension tabs by preloadClaimsLock.
+          const preloadedImages = JSON.parse(localStorage.getItem(preloadedImagesKey)) || [];
+          const preloadingImages = getActivePreloadingImages();
+          const excludedImages = [
+            ...new Set(preloadedImages.concat(preloadingImages, [currentImageId])),
+          ];
 
           // Exit early if we have enough images preloaded
           if (
@@ -511,10 +701,16 @@ import {
             });
 
             if (nextArtwork) {
-              preloadingImages.push(nextArtwork.image_id);
-              localStorage.setItem(preloadingImagesKey, JSON.stringify(preloadingImages));
-              preloadsStartedThisPage.add(nextArtwork.image_id);
-              addTiledImage(nextArtwork, true);
+              claimPreload(nextArtwork.image_id).then(function(claimed) {
+                if (!claimed) {
+                  return;
+                }
+                if (pageIsUnloading || generation !== imageLoadGeneration) {
+                  releasePreload(nextArtwork.image_id);
+                  return;
+                }
+                addTiledImage(nextArtwork, true);
+              });
             }
           }
         });
