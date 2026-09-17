@@ -35,7 +35,7 @@ select {
 
 .checkbox {
   display: block;
-  margin: 12px;
+  margin: 8px 12px;
 
   input {
       margin-right: 12px;

@@ -22,7 +22,7 @@ departmentQuery.aggregations = { departments: { terms: { field: filterFields.dep
 
 const settings = getSettings();
 
-document.querySelector('#version').textContent = `Version ${chrome.runtime.getManifest().version}`;
+document.querySelector('#version').textContent = `v${chrome.runtime.getManifest().version}`;
 
 const selectDaily = document.querySelector('#daily');
 selectDaily.value = settings.dailyMode;
