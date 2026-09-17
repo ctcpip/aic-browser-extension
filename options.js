@@ -1,6 +1,5 @@
 import {
   artworkCacheKeys,
-  escape,
   filterFields,
   getJsonData,
   getSettings,
@@ -47,10 +46,13 @@ if (settings.departmentOptions.options.length === 0 || lastFetchedMoreThanAWeekA
 const divDepartments = document.getElementById('departments');
 
 for (const o of settings.departmentOptions.options) {
-  const sanitized = escape(o);
-  const template = document.createElement('div');
-  template.innerHTML = `<label class="checkbox"><input type="checkbox" value="${sanitized}">${sanitized}</label>`;
-  divDepartments.append(...template.children);
+  const label = document.createElement('label');
+  const input = document.createElement('input');
+  label.className = 'checkbox';
+  input.type = 'checkbox';
+  input.value = o;
+  label.append(input, document.createTextNode(o));
+  divDepartments.append(label);
 }
 
 function updateDepartment() {
@@ -67,7 +69,7 @@ if (settings.departmentOptions.selected.length === 0) {
 }
 else {
   settings.departmentOptions.selected.forEach((o) => {
-    const option = divDepartments.querySelector(`[value="${o}"]`);
+    const option = [...divDepartments.querySelectorAll('input')].find(input => input.value === o);
     // guard against options disappearing or being renamed
     if (option) {
       option.checked = true;

@@ -1,23 +1,20 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-
-const PACKAGE_JSON_PATH = path.resolve(__dirname, 'package.json');
-const ZIP_FILENAME = 'aic-browser-extension-enhanced.zip';
-
-const packageJSON = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'));
-const files = packageJSON.files;
-
-if (fs.existsSync(ZIP_FILENAME)) {
-  fs.unlinkSync(ZIP_FILENAME);
-}
-
-const quotedPaths = files.map(f => `"${f}"`).join(' ');
-const command = `zip -r "${ZIP_FILENAME}" ${quotedPaths}`;
+const { build } = require('./build.cjs');
 
 try {
-  execSync(command, { stdio: 'inherit' });
-  console.log(`✅ Created ${ZIP_FILENAME}`);
+  fs.rmSync(path.join(__dirname, 'aic-browser-extension-enhanced.zip'), { force: true });
+  build();
+
+  for (const browser of ['chrome', 'firefox']) {
+    const filename = path.join(__dirname, `aic-browser-extension-enhanced-${browser}.zip`);
+    execSync(`rm -f "${filename}" && zip -r "${filename}" .`, {
+      cwd: path.join(__dirname, 'dist', browser),
+      stdio: 'inherit',
+    });
+    console.log(`✅ Created ${path.basename(filename)}`);
+  }
 }
 catch (err) {
   console.error('❌ Failed to create zip:', err.message);

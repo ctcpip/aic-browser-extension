@@ -25,13 +25,29 @@ import {
   let titleElement;
   let artistElement;
   let artworkContainer;
+  let imageErrorElement;
+  let imageErrorTitleElement;
+  let imageErrorBodyElement;
+  let imageAccessButton;
   let viewer;
+  let imageLoadGeneration = 0;
+  let lastCookieSync = null;
+  let cloudflareReady = Promise.resolve();
+  let diagnosisGeneration = null;
+  let diagnosticRetryGeneration = null;
+  const tileFailureHandlers = new Set();
+  const preloadsStartedThisPage = new Set();
 
   document.addEventListener('DOMContentLoaded', function() {
     tombstoneElement = document.getElementById('tombstone');
     titleElement = document.getElementById('title');
     artistElement = document.getElementById('artist');
     artworkContainer = document.getElementById('artwork-container');
+    imageErrorElement = document.getElementById('image-error');
+    imageErrorTitleElement = document.getElementById('image-error-title');
+    imageErrorBodyElement = document.getElementById('image-error-body');
+    imageAccessButton = document.getElementById('image-access-button');
+    imageAccessButton.addEventListener('click', handleImageAccessClick);
 
     viewer = OpenSeadragon({  // eslint-disable-line no-undef
       element: artworkContainer,
@@ -58,6 +74,7 @@ import {
       showSequenceControl: false,
     });
 
+    cloudflareReady = syncCloudflareCookies();
     loadNewArtwork(false);
 
     const reloadLink = document.getElementById('reload-link');
@@ -65,10 +82,135 @@ import {
     reloadLink.addEventListener('keypress', handleReload);
   });
 
-  function handleReload(e) {
+  async function ensureArticHostAccess() {
+    const extensionApi = typeof browser !== 'undefined' ? browser : chrome;
+    if (!extensionApi?.permissions?.request) {
+      return true;
+    }
+
+    const origins = ['https://www.artic.edu/*', 'https://artic.edu/*'];
+    try {
+      const granted = await extensionApi.permissions.request({ origins });
+      if (!granted) {
+        throw new Error('The browser denied the artic.edu site-access request');
+      }
+      return true;
+    }
+    catch (error) {
+      console.warn('[aic-art-tab] site access request failed', error);
+      return {
+        granted: false,
+        error: String(error),
+      };
+    }
+  }
+
+  async function handleImageAccessClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    imageAccessButton.disabled = true;
+
+    const permission = await ensureArticHostAccess();
+    if (permission !== true) {
+      imageAccessButton.disabled = false;
+      showImageError('permission', {
+        hostAccess: false,
+        error: permission.error,
+      });
+      return;
+    }
+
+    cloudflareReady = syncCloudflareCookies(true);
+    await cloudflareReady;
+    loadNewArtwork(false);
+  }
+
+  async function sendBackgroundMessage(message) {
+    const runtime = typeof browser !== 'undefined' ? browser : chrome;
+    if (!runtime?.runtime?.sendMessage) {
+      return null;
+    }
+
+    let lastError = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const result = await runtime.runtime.sendMessage(message);
+        if (result !== undefined) {
+          return result;
+        }
+      }
+      catch (error) {
+        lastError = error;
+      }
+      await new Promise(function(resolve) {
+        setTimeout(resolve, 150 * (attempt + 1));
+      });
+    }
+
+    console.warn('[aic-art-tab] background message failed', lastError);
+    return null;
+  }
+
+  async function syncCloudflareCookies(force = false) {
+    lastCookieSync = await sendBackgroundMessage({ type: 'syncCloudflareCookies', force });
+    return lastCookieSync;
+  }
+
+  async function diagnoseImageFailure(artwork, url, generation) {
+    if (diagnosisGeneration === generation) {
+      return;
+    }
+    diagnosisGeneration = generation;
+    const details = await sendBackgroundMessage({ type: 'fetchArticImage', url });
+    if (diagnosisGeneration === generation) {
+      diagnosisGeneration = null;
+    }
+    if (generation !== imageLoadGeneration) {
+      return;
+    }
+    lastCookieSync = details || lastCookieSync;
+    if (details?.ok && diagnosticRetryGeneration !== generation) {
+      diagnosticRetryGeneration = generation;
+      hideImageError();
+      addTiledImage(artwork, false);
+      return;
+    }
+    showImageFailure(lastCookieSync);
+  }
+
+  function handleImageFailure(artwork, url, generation) {
+    if (diagnosticRetryGeneration === generation) {
+      showImageError('generic', {
+        ...lastCookieSync,
+        error: 'Image display failed after a successful diagnostic fetch',
+      });
+      return;
+    }
+    diagnoseImageFailure(artwork, url, generation);
+  }
+
+  function releasePreload(imageId) {
+    if (!preloadsStartedThisPage.delete(imageId)) {
+      return;
+    }
+
+    const preloadingImages = JSON.parse(localStorage.getItem(preloadingImagesKey)) || [];
+    localStorage.setItem(
+      preloadingImagesKey,
+      JSON.stringify(preloadingImages.filter(item => item !== imageId)),
+    );
+  }
+
+  function releasePagePreloads() {
+    [...preloadsStartedThisPage].forEach(releasePreload);
+  }
+
+  async function handleReload(e) {
     // handle keyboard interaction
     if (e.type === 'click' || (e.type === 'keypress' && (e.key === 'Enter' || e.key === ' '))) {
       e.preventDefault();
+      cloudflareReady = syncCloudflareCookies(true);
+      await cloudflareReady;
       loadNewArtwork(true);
     }
   }
@@ -136,7 +278,65 @@ import {
     updatePage(artwork);
   }
 
-  function updatePage(artwork) {
+  function hideImageError() {
+    if (imageErrorElement) {
+      imageErrorElement.hidden = true;
+    }
+  }
+
+  function showImageError(kind, details) {
+    if (!imageErrorElement) {
+      return;
+    }
+
+    console.warn('[aic-art-tab] image error', { kind, ...details });
+    imageAccessButton.hidden = details?.hostAccess !== false;
+    imageAccessButton.disabled = false;
+
+    if (kind === 'permission') {
+      imageErrorTitleElement.textContent = 'Image access is required';
+      imageErrorBodyElement.textContent = 'Allow access to images on artic.edu, then try again.';
+    }
+    else if (kind === 'cloudflare-no-cookie') {
+      imageErrorTitleElement.textContent = 'Image blocked by Cloudflare';
+      imageErrorBodyElement.textContent = 'Complete the Cloudflare check in a regular tab on artic.edu, then reload this page.';
+    }
+    else if (kind === 'cloudflare') {
+      imageErrorTitleElement.textContent = 'Image blocked by Cloudflare';
+      imageErrorBodyElement.textContent = details?.hasClearance
+        ? 'The image server still returned a security challenge. Try visiting artic.edu again, then reload this tab.'
+        : 'The museum’s image server returned a security challenge instead of the artwork. Try loading a new piece, or open this work on artic.edu.';
+    }
+    else {
+      imageErrorTitleElement.textContent = 'Image couldn\'t be loaded';
+      imageErrorBodyElement.textContent = 'Something went wrong while fetching this artwork. Try loading a new piece, or open this work on artic.edu.';
+    }
+
+    imageErrorElement.hidden = false;
+  }
+
+  function showImageFailure(details) {
+    if (details?.hostAccess === false) {
+      showImageError('permission', details);
+    }
+    else if (details?.cloudflareChallenge) {
+      showImageError(details.hasClearance ? 'cloudflare' : 'cloudflare-no-cookie', details);
+    }
+    else {
+      showImageError('generic', details);
+    }
+  }
+
+  async function updatePage(artwork) {
+    releasePagePreloads();
+    imageLoadGeneration += 1;
+    const generation = imageLoadGeneration;
+    tileFailureHandlers.forEach(function(handler) {
+      viewer.removeHandler('tile-load-failed', handler);
+    });
+    tileFailureHandlers.clear();
+    hideImageError();
+
     const artistPrint = [artwork?.artist_title, artwork?.date_display]
       .filter(function(el) {
         return el !== null;
@@ -159,11 +359,14 @@ import {
 
     document.getElementById('artwork-url').setAttribute('href', linkToArtwork);
 
-    // Work-around for saving canvas images with white borders
+    await cloudflareReady;
+    if (generation !== imageLoadGeneration) {
+      return;
+    }
+
     document
       .getElementById('artwork-save-overlay')
       .setAttribute('src', `https://www.artic.edu/iiif/2/${artwork.image_id}/full/843,/0/default.jpg`);
-
     addTiledImage(artwork, false);
   }
 
@@ -183,6 +386,7 @@ import {
   function addTiledImage(artwork, isPreload, levels) {
     // Save this so we can add it to our preload log
     const currentImageId = artwork.image_id;
+    const generation = imageLoadGeneration;
 
     if (!isPreload) {
       // clear out any previous
@@ -196,16 +400,43 @@ import {
       getIIIFLevel(artwork, 1686),
     ];
 
-    viewer.removeAllHandlers('tile-load-failed');
+    if (generation !== imageLoadGeneration) {
+      if (isPreload) {
+        releasePreload(currentImageId);
+      }
+      return;
+    }
 
-    viewer.addHandler('tile-load-failed', function(/* e */) {
-      // console.debug(e);
+    const levelUrls = new Set(levels.map(level => level.url));
+    const tileFailureHandler = function(event) {
+      if (generation !== imageLoadGeneration) {
+        viewer.removeHandler('tile-load-failed', tileFailureHandler);
+        tileFailureHandlers.delete(tileFailureHandler);
+        event?.tiledImage?.destroy();
+        if (isPreload) {
+          releasePreload(currentImageId);
+        }
+        return;
+      }
+      if (event?.tile?.url && !levelUrls.has(event.tile.url)) {
+        return;
+      }
 
-      // if load failed, it's probably due to 403 Forbidden: Requests for scales in excess of 100% are not allowed.
-      // so remove the largest scale level and try again
-      levels.pop();
-      addTiledImage(artwork, isPreload, levels);
-    });
+      viewer.removeHandler('tile-load-failed', tileFailureHandler);
+      tileFailureHandlers.delete(tileFailureHandler);
+      event?.tiledImage?.destroy();
+      if (levels.length > 1) {
+        addTiledImage(artwork, isPreload, levels.slice(0, -1));
+      }
+      else if (isPreload) {
+        releasePreload(currentImageId);
+      }
+      else {
+        handleImageFailure(artwork, levels[0].url, generation);
+      }
+    };
+    viewer.addHandler('tile-load-failed', tileFailureHandler);
+    tileFailureHandlers.add(tileFailureHandler);
 
     // https://openseadragon.github.io/docs/OpenSeadragon.Viewer.html#addTiledImage
     viewer.addTiledImage({
@@ -222,6 +453,20 @@ import {
 
           // We don't want this to fire on every zoom and pan
           tiledImage.removeAllHandlers('fully-loaded-change');
+          viewer.removeHandler('tile-load-failed', tileFailureHandler);
+          tileFailureHandlers.delete(tileFailureHandler);
+
+          if (generation !== imageLoadGeneration) {
+            tiledImage.destroy();
+            if (isPreload) {
+              releasePreload(currentImageId);
+            }
+            return;
+          }
+
+          if (!isPreload) {
+            hideImageError();
+          }
 
           // We want to check LocalStorage each time in case multiple new tabs are preloading
           const preloadedImages = JSON.parse(localStorage.getItem(preloadedImagesKey)) || [];
@@ -241,6 +486,7 @@ import {
 
             localStorage.setItem(preloadingImagesKey, JSON.stringify(preloadingImages));
             localStorage.setItem(preloadedImagesKey, JSON.stringify(preloadedImages));
+            preloadsStartedThisPage.delete(currentImageId);
 
             tiledImage.destroy(); // don't load more tiles during zoom and pan
 
@@ -267,13 +513,22 @@ import {
             if (nextArtwork) {
               preloadingImages.push(nextArtwork.image_id);
               localStorage.setItem(preloadingImagesKey, JSON.stringify(preloadingImages));
+              preloadsStartedThisPage.add(nextArtwork.image_id);
               addTiledImage(nextArtwork, true);
             }
           }
         });
       },
       error: function(event) {
+        viewer.removeHandler('tile-load-failed', tileFailureHandler);
+        tileFailureHandlers.delete(tileFailureHandler);
         console.error(event);
+        if (isPreload) {
+          releasePreload(currentImageId);
+        }
+        else if (generation === imageLoadGeneration) {
+          handleImageFailure(artwork, levels[0].url, generation);
+        }
       },
     });
   }

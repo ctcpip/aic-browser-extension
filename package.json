@@ -4,6 +4,7 @@
   "//": "mark private as this should not be published to npm or other package registries",
   "private": "true",
   "scripts": {
+    "build": "node build.cjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "pack": "node pack.cjs",
@@ -30,6 +31,8 @@
   },
   "files": [
     "assets/",
+    "background.js",
+    "cloudflare-cookies.js",
     "index.html",
     "manifest.json",
     "lib.js",

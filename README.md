@@ -16,11 +16,13 @@ A browser extension that presents a random work of art from the Art Institute of
 
 ## Development
 
-- Clone the project
-- From Chrome menu choose Window - Extensions
+- Clone the project and run `npm run build`
+- For Chrome, load the `dist/chrome` directory
+- For Firefox, load `dist/firefox/manifest.json` as a temporary add-on
+- From the Chrome menu choose Window - Extensions
 - Toggle on "Developer Mode"
 - Click "Load Unpacked"
-- Select the browser-extension folder you cloned
+- Select the `dist/chrome` directory
 
 ## Background
 

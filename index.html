@@ -12,8 +12,13 @@
     <body>
         <a id="artwork-url">
             <div id="artwork-container" oncontextmenu="return false;"></div>
-            <img id="artwork-save-overlay" ondragstart="return false;" ondrop="return false;" />
+            <img id="artwork-save-overlay" alt="" ondragstart="return false;" ondrop="return false;" />
         </a>
+        <div id="image-error" hidden role="alert">
+            <p id="image-error-title"></p>
+            <p id="image-error-body"></p>
+            <button id="image-access-button" type="button" hidden>Allow image access</button>
+        </div>
         <div id="reload-container">
             <a id="reload-link" title="Load new artwork" tabindex="0">
                 <img src="assets/reload--24.svg" alt="Load new artwork" />

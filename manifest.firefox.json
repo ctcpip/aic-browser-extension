@@ -22,11 +22,12 @@
     "newtab": "index.html"
   },
   "background": {
-    "service_worker": "background.js"
+    "scripts": ["cloudflare-cookies.js", "background.js"]
   },
   "permissions": [
     "cookies",
-    "declarativeNetRequest"
+    "webRequest",
+    "webRequestBlocking"
   ],
   "host_permissions": [
     "https://api.artic.edu/*"
@@ -39,7 +40,13 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "{30461fac-56ff-4058-b23b-d020b6be46c1}",
-      "strict_min_version": "121.0"
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["websiteContent"]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
     }
   }
 }
