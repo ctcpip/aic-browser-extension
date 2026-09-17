@@ -38,7 +38,7 @@ export default [
     languageOptions: { sourceType: 'script' },
   },
   {
-    files: ['build.cjs', 'pack.cjs'],
+    files: ['build.cjs', 'pack.cjs', 'version.cjs'],
     languageOptions: {
       globals: {
         __dirname: 'readonly',

@@ -1,6 +1,6 @@
 {
   "name": "aic-browser-extension-enhanced",
-  "version": "2.0",
+  "version": "2.1.0",
   "//": "mark private as this should not be published to npm or other package registries",
   "private": "true",
   "scripts": {
@@ -8,8 +8,9 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "pack": "node pack.cjs",
+    "version": "node version.cjs",
     "//": "pack runs build, so no need to run build in test command",
-    "test": "npm run lint && npm run pack"
+    "test": "npm run lint && npm run version && npm run pack"
   },
   "main": "index.js",
   "type": "module",

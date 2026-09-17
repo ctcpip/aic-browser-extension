@@ -27,6 +27,12 @@ select {
   padding: 16px 12px;
 }
 
+#version {
+  color: #aaa;
+  font-size: 13px;
+  text-align: right;
+}
+
 .checkbox {
   display: block;
   margin: 12px;
